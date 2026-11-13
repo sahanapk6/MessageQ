@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install kernel headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y linux-headers-$(uname -r)
+
+      - name: Build module and tests
+        run: make
+
+      - name: Load module
+        run: sudo insmod driver/msgring.ko ndevs=2
+
+      - name: Run test suite
+        run: |
+          tests/msgring_test /dev/msgring0
+          tests/msgring_test /dev/msgring1
+
+      - name: Show debugfs stats
+        run: sudo cat /sys/kernel/debug/msgring/msgring0
+
+      - name: Unload module
+        run: sudo rmmod msgring
+
+      - name: Kernel log must be clean
+        if: always()
+        run: |
+          sudo dmesg | grep msgring || true
+          ! sudo dmesg | grep -E "BUG|Oops|KASAN|Call Trace"
